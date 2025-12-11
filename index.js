@@ -1,6 +1,7 @@
 const express = require("express");
 const axios = require("axios");
 const bodyParser = require("body-parser");
+const { XMLParser } = require("fast-xml-parser");
 
 const app = express();
 app.use(bodyParser.text({ type: "*/*" })); // to handle XML bodies
@@ -94,10 +95,12 @@ app.get("/fetch-customers", async (req, res) => {
 // ========================
 // 3. Fetch Inventory
 // ========================
+const { XMLParser } = require("fast-xml-parser");
+
 app.get("/fetch-inventory/:company", async (req, res) => {
   const { company } = req.params;
   if (!company) {
-    return res.status(400).send("company query param required");
+    return res.status(400).send("company param required");
   }
 
   const xml = `
@@ -123,15 +126,35 @@ app.get("/fetch-inventory/:company", async (req, res) => {
       headers: { "Content-Type": "text/xml" }
     });
 
-    console.log("\n====== INVENTORY XML ======");
-    console.log(response.data);
+    const xmlData = response.data;
 
-    res.send("Fetched inventory from Tally — check console");
+    // Parse XML → JSON
+    const parser = new XMLParser({
+      ignoreAttributes: false,
+      attributeNamePrefix: "",
+      textNodeName: "value"
+    });
+
+    const json = parser.parse(xmlData);
+
+    // Navigate to ITEMS array inside ENVELOPE
+    const items =
+      json?.ENVELOPE?.BODY?.DATA?.COLLECTION?.ITEMS ||
+      json?.ENVELOPE?.BODY?.DESC?.ITEMS ||
+      [];
+
+    return res.json({
+      company,
+      totalItems: Array.isArray(items) ? items.length : 1,
+      items
+    });
+
   } catch (err) {
     console.error("Error fetching inventory:", err.message);
     res.status(500).send("Failed to fetch inventory");
   }
 });
+
 
 // ========================
 // START SERVER
