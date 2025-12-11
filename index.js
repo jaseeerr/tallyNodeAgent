@@ -105,13 +105,9 @@ app.get("/fetch-inventory/:company", async (req, res) => {
   console.log("Company:", company);
 
   if (!company) {
-    console.log("❌ ERROR: No company provided");
     return res.status(400).send("company param required");
   }
 
-  // -------------------------
-  // 1. Build XML request
-  // -------------------------
   const xmlRequest = `
   <ENVELOPE>
     <HEADER>
@@ -132,81 +128,44 @@ app.get("/fetch-inventory/:company", async (req, res) => {
 
   console.log("\n📤 Sending XML to Tally...");
   console.log("Tally URL:", TALLY_URL);
-  console.log("Request XML length:", xmlRequest.length);
 
   try {
-    // -------------------------
-    // 2. Send request to Tally
-    // -------------------------
     const tallyResponse = await axios.post(TALLY_URL, xmlRequest, {
       headers: { "Content-Type": "text/xml" },
       timeout: 10000
     });
 
-    console.log("\n📥 Response received from Tally");
-    console.log("HTTP Status:", tallyResponse.status);
-    console.log("Raw XML Length:", tallyResponse.data?.length || 0);
-
-    const xmlData = tallyResponse.data;
-
-    // -------------------------
-    // 3. Parse XML → JSON
-    // -------------------------
-    console.log("\n🔍 Parsing XML...");
+    console.log("\n📥 Response received");
+    console.log("Status:", tallyResponse.status);
+    console.log("Raw XML length:", tallyResponse.data?.length);
 
     const parser = new XMLParser({
       ignoreAttributes: false,
       attributeNamePrefix: "",
-      textNodeName: "value",
-      removeNSPrefix: true
+      textNodeName: "value"
     });
 
     let parsed;
     try {
-      parsed = parser.parse(xmlData);
+      parsed = parser.parse(tallyResponse.data);
       console.log("✅ XML Parsed Successfully");
     } catch (parseErr) {
       console.log("❌ XML Parse Error:", parseErr.message);
-      return res.status(500).json({ error: "Failed to parse XML", details: parseErr.message });
+      return res.status(500).json({ error: "XML parse failed" });
     }
 
-    console.log("\n🔎 Checking structure...");
-    console.log("Keys at ENVELOPE level:", Object.keys(parsed?.ENVELOPE || {}));
-
-    const body = parsed?.ENVELOPE?.BODY;
-    if (!body) {
-      console.log("❌ ERROR: BODY missing in Tally response");
-      return res.json({ error: "BODY not found", parsed });
-    }
-
-    // Tally returns different structures sometimes
-    const possiblePaths = [
-      body?.DATA?.COLLECTION?.ITEMS,
-      body?.DESC?.COLLECTION?.ITEMS,
-      body?.DESC?.ITEMS,
-      body?.COLLECTION?.ITEMS
-    ];
-
-    console.log("\n🔍 Checking possible item paths...");
-
-    let items = null;
-
-    for (let i = 0; i < possiblePaths.length; i++) {
-      if (possiblePaths[i]) {
-        items = possiblePaths[i];
-        console.log(`✔ Items found at path #${i + 1}`);
-        break;
-      } else {
-        console.log(`❌ Path #${i + 1} empty`);
-      }
-    }
+    // ----------------------------------------------------------
+    // ⭐⭐ FIXED: Tally response places ITEMS directly in ENVELOPE
+    // ----------------------------------------------------------
+    const items = parsed?.ENVELOPE?.ITEMS;
 
     if (!items) {
-      console.log("❌ No ITEMS found in any expected path.");
+      console.log("❌ ITEMS not found in ENVELOPE");
+      console.log("Available keys:", Object.keys(parsed.ENVELOPE || {}));
+
       return res.json({
-        error: "No ITEMS found",
-        structure: Object.keys(body),
-        sample: parsed
+        error: "ITEMS not found at ENVELOPE level",
+        structure: parsed.ENVELOPE
       });
     }
 
@@ -220,21 +179,9 @@ app.get("/fetch-inventory/:company", async (req, res) => {
     });
 
   } catch (err) {
-    // -------------------------
-    // 4. Network or Tally error
-    // -------------------------
-    console.log("\n❌ ERROR communicating with Tally");
+    console.log("\n❌ Network / Tally error");
     console.log("Message:", err.message);
-
-    if (err.response) {
-      console.log("Response status:", err.response.status);
-      console.log("Response body length:", err.response.data?.length);
-    }
-
-    return res.status(500).json({
-      error: "Failed to fetch inventory",
-      message: err.message
-    });
+    return res.status(500).json({ error: err.message });
   }
 });
 
