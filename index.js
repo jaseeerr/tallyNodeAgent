@@ -18,44 +18,38 @@ const TALLY_URL = `http://localhost:${TALLY_PORT}`;
 
 
 // helper sender
-async function sendToCloudInventorySync(company, items) {
-  console.log("\n==============================");
-  console.log("📤 PUSHING INVENTORY TO CLOUD");
-  console.log("==============================");
-  console.log("Company:", company);
+async function sendInventoryInBatches(company, items, batchSize = 500) {
+  console.log(`\n🚀 Starting batch sync: ${items.length} items (batch size: ${batchSize})`);
 
-  try {
-    // Transform Tally fields → Backend fields
-    const cleanedItems = items.map((item) => ({
-      itemName: item.NAME || item.itemName || "",       // (mapped in sync API)
-      itemGroup: item.GROUP || item.itemGroup || "",
-      unit: item.UNITS || item.unit || "",
-      closingQty: item.CLOSINGQTY || item.closingQty || "",
-      salesPrice: item.SALESPRICE || item.salesPrice || "",
-      stdCost: item.STDCOST || item.stdCost || ""
-    }));
+  let index = 0;
+  let batchNumber = 1;
 
-    console.log("📦 Sending Items:", cleanedItems.length);
+  while (index < items.length) {
+    const batch = items.slice(index, index + batchSize);
 
-    const response = await axios.post(
-      "https://app.fancypalace.cloud/api/inventory-sync",
-      {
-        company,
-        items: cleanedItems
-      },
-      {
-        timeout: 15000
-      }
-    );
+    console.log(`📤 Sending batch ${batchNumber} (${batch.length} items)...`);
 
-    console.log("✅ Cloud Sync Success:", response.data);
-    return response.data;
+    try {
+      const response = await axios.post(
+        "https://app.fancypalace.cloud/api/inventory-sync",
+        { company, items: batch },
+        { timeout: 30000 }
+      );
 
-  } catch (err) {
-    console.error("❌ Cloud Sync Error:", err.message);
-    return { ok: false, error: err.message };
+      console.log(`✅ Batch ${batchNumber} synced successfully`);
+    } catch (err) {
+      console.error(`❌ Batch ${batchNumber} failed:`, err.message);
+      return { ok: false, failedBatch: batchNumber, error: err.message };
+    }
+
+    index += batchSize;
+    batchNumber++;
   }
+
+  console.log("\n🎉 All batches synced successfully!");
+  return { ok: true, totalSynced: items.length };
 }
+
 
 
 
