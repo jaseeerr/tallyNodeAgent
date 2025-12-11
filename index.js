@@ -31,7 +31,7 @@ async function sendInventoryInBatches(company, items, batchSize = 500) {
 
     try {
       const response = await axios.post(
-        "https://app.fancypalace.cloud/api/inventory-sync",
+        "https://app.fancypalace.cloud/api/agent/inventory-sync",
         { company, items: batch },
         { timeout: 30000 }
       );
