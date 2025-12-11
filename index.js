@@ -223,6 +223,16 @@ app.get("/fetch-inventory/:company", async (req, res) => {
 
     console.log(`\n📦 TOTAL ITEMS FOUND: ${Array.isArray(items) ? items.length : 1}`);
 
+    const payload = { company, items };
+
+const jsonString = JSON.stringify(payload);
+const bytes = Buffer.byteLength(jsonString, "utf8");
+const kb = (bytes / 1024).toFixed(2);
+const mb = (bytes / 1024 / 1024).toFixed(2);
+
+console.log(`📦 Payload Size: ${bytes} bytes (${kb} KB / ${mb} MB)`);
+
+
   const syncResult = await sendToCloudInventorySync(company, items);
 
     return res.json({
