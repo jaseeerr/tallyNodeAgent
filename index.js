@@ -227,7 +227,7 @@ const mb = (bytes / 1024 / 1024).toFixed(2);
 console.log(`📦 Payload Size: ${bytes} bytes (${kb} KB / ${mb} MB)`);
 
 
-  const syncResult = await sendToCloudInventorySync(company, items);
+  const syncResult = await sendInventoryInBatches(company, items);
 
     return res.json({
       success: true,
