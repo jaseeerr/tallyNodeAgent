@@ -94,8 +94,8 @@ app.get("/fetch-customers", async (req, res) => {
 // ========================
 // 3. Fetch Inventory
 // ========================
-app.get("/fetch-inventory", async (req, res) => {
-  const { company } = req.query;
+app.get("/fetch-inventory/:company", async (req, res) => {
+  const { company } = req.params;
   if (!company) {
     return res.status(400).send("company query param required");
   }
