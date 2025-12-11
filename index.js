@@ -171,8 +171,40 @@ app.get("/fetch-inventory/:company", async (req, res) => {
 
     console.log(`\n📦 TOTAL ITEMS FOUND: ${Array.isArray(items) ? items.length : 1}`);
 
+    function getDistinctFields(items) {
+  const uniqueFields = new Set();
+
+  // Convert single object to array
+  if (!Array.isArray(items)) {
+    items = [items];
+  }
+
+  // Recursive function to collect keys
+  function extractKeys(obj) {
+    if (typeof obj !== "object" || obj === null) return;
+
+    for (const key of Object.keys(obj)) {
+      uniqueFields.add(key);
+
+      // If nested object → go deeper
+      if (typeof obj[key] === "object") {
+        extractKeys(obj[key]);
+      }
+    }
+  }
+
+  // Loop through items
+  for (const item of items) {
+    extractKeys(item);
+  }
+
+  return Array.from(uniqueFields);
+}
+
+const fields = getDistinctFields(items)
     return res.json({
       success: true,
+      fields,
       company,
       totalItems: Array.isArray(items) ? items.length : 1,
       items
