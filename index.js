@@ -227,8 +227,8 @@ app.get("/fetch-inventory/:company", async (req, res) => {
 
     return res.json({
       success: true,
-      fields,
       company,
+      syncResult,
       totalItems: Array.isArray(items) ? items.length : 1,
       items
     });
