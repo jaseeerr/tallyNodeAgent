@@ -14,8 +14,8 @@ const TALLY_URL = `http://localhost:${TALLY_PORT}`;
 // ========================
 // 1. Switch Active Company
 // ========================
-app.get("/switch-company", async (req, res) => {
-  const { company } = req.query;
+app.get("/switch-company/:company", async (req, res) => {
+  const { company } = req.params;
   if (!company) {
     return res.status(400).send("company query param is required");
   }
