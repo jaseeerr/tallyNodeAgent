@@ -98,11 +98,21 @@ app.get("/fetch-customers", async (req, res) => {
 
 app.get("/fetch-inventory/:company", async (req, res) => {
   const { company } = req.params;
+
+  console.log("\n==============================");
+  console.log("📌 FETCH INVENTORY INITIATED");
+  console.log("==============================");
+  console.log("Company:", company);
+
   if (!company) {
+    console.log("❌ ERROR: No company provided");
     return res.status(400).send("company param required");
   }
 
-  const xml = `
+  // -------------------------
+  // 1. Build XML request
+  // -------------------------
+  const xmlRequest = `
   <ENVELOPE>
     <HEADER>
       <VERSION>1</VERSION>
@@ -120,37 +130,111 @@ app.get("/fetch-inventory/:company", async (req, res) => {
     </BODY>
   </ENVELOPE>`;
 
+  console.log("\n📤 Sending XML to Tally...");
+  console.log("Tally URL:", TALLY_URL);
+  console.log("Request XML length:", xmlRequest.length);
+
   try {
-    const response = await axios.post(TALLY_URL, xml, {
-      headers: { "Content-Type": "text/xml" }
+    // -------------------------
+    // 2. Send request to Tally
+    // -------------------------
+    const tallyResponse = await axios.post(TALLY_URL, xmlRequest, {
+      headers: { "Content-Type": "text/xml" },
+      timeout: 10000
     });
 
-    const xmlData = response.data;
+    console.log("\n📥 Response received from Tally");
+    console.log("HTTP Status:", tallyResponse.status);
+    console.log("Raw XML Length:", tallyResponse.data?.length || 0);
 
-    // Parse XML → JSON
+    const xmlData = tallyResponse.data;
+
+    // -------------------------
+    // 3. Parse XML → JSON
+    // -------------------------
+    console.log("\n🔍 Parsing XML...");
+
     const parser = new XMLParser({
       ignoreAttributes: false,
       attributeNamePrefix: "",
-      textNodeName: "value"
+      textNodeName: "value",
+      removeNSPrefix: true
     });
 
-    const json = parser.parse(xmlData);
+    let parsed;
+    try {
+      parsed = parser.parse(xmlData);
+      console.log("✅ XML Parsed Successfully");
+    } catch (parseErr) {
+      console.log("❌ XML Parse Error:", parseErr.message);
+      return res.status(500).json({ error: "Failed to parse XML", details: parseErr.message });
+    }
 
-    // Navigate to ITEMS array inside ENVELOPE
-    const items =
-      json?.ENVELOPE?.BODY?.DATA?.COLLECTION?.ITEMS ||
-      json?.ENVELOPE?.BODY?.DESC?.ITEMS ||
-      [];
+    console.log("\n🔎 Checking structure...");
+    console.log("Keys at ENVELOPE level:", Object.keys(parsed?.ENVELOPE || {}));
+
+    const body = parsed?.ENVELOPE?.BODY;
+    if (!body) {
+      console.log("❌ ERROR: BODY missing in Tally response");
+      return res.json({ error: "BODY not found", parsed });
+    }
+
+    // Tally returns different structures sometimes
+    const possiblePaths = [
+      body?.DATA?.COLLECTION?.ITEMS,
+      body?.DESC?.COLLECTION?.ITEMS,
+      body?.DESC?.ITEMS,
+      body?.COLLECTION?.ITEMS
+    ];
+
+    console.log("\n🔍 Checking possible item paths...");
+
+    let items = null;
+
+    for (let i = 0; i < possiblePaths.length; i++) {
+      if (possiblePaths[i]) {
+        items = possiblePaths[i];
+        console.log(`✔ Items found at path #${i + 1}`);
+        break;
+      } else {
+        console.log(`❌ Path #${i + 1} empty`);
+      }
+    }
+
+    if (!items) {
+      console.log("❌ No ITEMS found in any expected path.");
+      return res.json({
+        error: "No ITEMS found",
+        structure: Object.keys(body),
+        sample: parsed
+      });
+    }
+
+    console.log(`\n📦 TOTAL ITEMS FOUND: ${Array.isArray(items) ? items.length : 1}`);
 
     return res.json({
+      success: true,
       company,
       totalItems: Array.isArray(items) ? items.length : 1,
       items
     });
 
   } catch (err) {
-    console.error("Error fetching inventory:", err.message);
-    res.status(500).send("Failed to fetch inventory");
+    // -------------------------
+    // 4. Network or Tally error
+    // -------------------------
+    console.log("\n❌ ERROR communicating with Tally");
+    console.log("Message:", err.message);
+
+    if (err.response) {
+      console.log("Response status:", err.response.status);
+      console.log("Response body length:", err.response.data?.length);
+    }
+
+    return res.status(500).json({
+      error: "Failed to fetch inventory",
+      message: err.message
+    });
   }
 });
 
