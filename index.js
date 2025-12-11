@@ -17,7 +17,28 @@ const TALLY_URL = `http://localhost:${TALLY_PORT}`;
 
 
 
-// helper sender
+// helpers
+function filterValidInventoryItems(items) {
+  const cleaned = items.filter(item => {
+    const name = item.NAME;
+
+    // Reject null, undefined, empty, spaces
+    if (!name || typeof name !== "string" || name.trim() === "") return false;
+
+    // Reject numeric zero or string "0"
+    if (name === 0 || name === "0") return false;
+
+    // Reject strange Tally placeholder
+    if (name.includes("&#")) return false;
+
+    return true;
+  });
+
+  console.log(`\n🧹 Filtered Items: ${cleaned.length}/${items.length} valid items`);
+  return cleaned;
+}
+
+
 async function sendInventoryInBatches(company, items, batchSize = 500) {
   console.log(`\n🚀 Starting batch sync: ${items.length} items (batch size: ${batchSize})`);
 
@@ -227,7 +248,11 @@ const mb = (bytes / 1024 / 1024).toFixed(2);
 console.log(`📦 Payload Size: ${bytes} bytes (${kb} KB / ${mb} MB)`);
 
 
-  const syncResult = await sendInventoryInBatches(company, items);
+// 🔥 Clean invalid items
+const validItems = filterValidInventoryItems(items);
+
+// 🔥 Now sync ONLY valid items
+const syncResult = await sendInventoryInBatches(company, validItems);
 
     return res.json({
       success: true,
