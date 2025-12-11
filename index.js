@@ -95,7 +95,6 @@ app.get("/fetch-customers", async (req, res) => {
 // ========================
 // 3. Fetch Inventory
 // ========================
-const { XMLParser } = require("fast-xml-parser");
 
 app.get("/fetch-inventory/:company", async (req, res) => {
   const { company } = req.params;
