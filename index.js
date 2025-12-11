@@ -12,6 +12,58 @@ app.use(bodyParser.text({ type: "*/*" })); // to handle XML bodies
 const TALLY_PORT = 9000; // example: Company A → 9000, Company B → 9001
 const TALLY_URL = `http://localhost:${TALLY_PORT}`;
 
+
+
+
+
+
+// helper sender
+async function sendToCloudInventorySync(company, items) {
+  console.log("\n==============================");
+  console.log("📤 PUSHING INVENTORY TO CLOUD");
+  console.log("==============================");
+  console.log("Company:", company);
+
+  try {
+    // Transform Tally fields → Backend fields
+    const cleanedItems = items.map((item) => ({
+      itemName: item.NAME || item.itemName || "",       // (mapped in sync API)
+      itemGroup: item.GROUP || item.itemGroup || "",
+      unit: item.UNITS || item.unit || "",
+      closingQty: item.CLOSINGQTY || item.closingQty || "",
+      salesPrice: item.SALESPRICE || item.salesPrice || "",
+      stdCost: item.STDCOST || item.stdCost || ""
+    }));
+
+    console.log("📦 Sending Items:", cleanedItems.length);
+
+    const response = await axios.post(
+      "https://app.fancypalace.cloud/api/inventory-sync",
+      {
+        company,
+        items: cleanedItems
+      },
+      {
+        timeout: 15000
+      }
+    );
+
+    console.log("✅ Cloud Sync Success:", response.data);
+    return response.data;
+
+  } catch (err) {
+    console.error("❌ Cloud Sync Error:", err.message);
+    return { ok: false, error: err.message };
+  }
+}
+
+
+
+
+
+
+
+
 // ========================
 // 1. Switch Active Company
 // ========================
@@ -171,37 +223,8 @@ app.get("/fetch-inventory/:company", async (req, res) => {
 
     console.log(`\n📦 TOTAL ITEMS FOUND: ${Array.isArray(items) ? items.length : 1}`);
 
-    function getDistinctFields(items) {
-  const uniqueFields = new Set();
+  const syncResult = await sendToCloudInventorySync(company, items);
 
-  // Convert single object to array
-  if (!Array.isArray(items)) {
-    items = [items];
-  }
-
-  // Recursive function to collect keys
-  function extractKeys(obj) {
-    if (typeof obj !== "object" || obj === null) return;
-
-    for (const key of Object.keys(obj)) {
-      uniqueFields.add(key);
-
-      // If nested object → go deeper
-      if (typeof obj[key] === "object") {
-        extractKeys(obj[key]);
-      }
-    }
-  }
-
-  // Loop through items
-  for (const item of items) {
-    extractKeys(item);
-  }
-
-  return Array.from(uniqueFields);
-}
-
-const fields = getDistinctFields(items)
     return res.json({
       success: true,
       fields,
