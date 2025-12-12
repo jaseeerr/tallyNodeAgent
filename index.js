@@ -122,11 +122,12 @@ app.get("/switch-company/:company", async (req, res) => {
 // ========================
 app.get("/fetch-customers/:company", async (req, res) => {
   const { company } = req.params;
+
   if (!company) {
     return res.status(400).send("company query param required");
   }
 
-  const xml = `
+  const xmlRequest = `
   <ENVELOPE>
     <HEADER>
       <VERSION>1</VERSION>
@@ -145,17 +146,68 @@ app.get("/fetch-customers/:company", async (req, res) => {
   </ENVELOPE>`;
 
   try {
-    const response = await axios.post(TALLY_URL, xml, {
+    const tallyResponse = await axios.post(TALLY_URL, xmlRequest, {
       headers: { "Content-Type": "text/xml" }
     });
 
-    console.log("\n====== CUSTOMERS XML ======");
-    console.log(response.data);
+    const xmlString = tallyResponse.data;
 
-    res.send("Fetched customers from Tally — check console");
+    const parser = new XMLParser({
+      ignoreAttributes: false,
+      attributeNamePrefix: "",
+      textNodeName: "value"
+    });
+
+    let parsed;
+    try {
+      parsed = parser.parse(xmlString);
+    } catch (err) {
+      return res.status(500).json({
+        error: "Failed to parse XML",
+        message: err.message
+      });
+    }
+
+    // ---------------------------------------------
+    // ⭐ Tally structure: ENVELOPE -> CUSTOMER list
+    // ---------------------------------------------
+    let customers = parsed?.ENVELOPE?.CUSTOMER;
+
+    if (!customers) {
+      return res.json({
+        error: "CUSTOMER nodes not found in ENVELOPE",
+        structure: parsed.ENVELOPE
+      });
+    }
+
+    // If only ONE customer, Tally returns object instead of array
+    if (!Array.isArray(customers)) {
+      customers = [customers];
+    }
+
+    // Clean & normalize (optional)
+    const cleaned = customers.map(c => ({
+      name: c.NAME || "",
+      group: c.GROUP || "",
+      balance: c.BALANCE || "",
+      address: Array.isArray(c.ADDRESS?.ADDRESS)
+        ? c.ADDRESS.ADDRESS
+        : [c.ADDRESS?.ADDRESS || ""]
+    }));
+
+    return res.json({
+      success: true,
+      company,
+      total: cleaned.length,
+      customers: cleaned
+    });
+
   } catch (err) {
     console.error("Error fetching customers:", err.message);
-    res.status(500).send("Failed to fetch customers");
+    return res.status(500).json({
+      error: "Failed to fetch customers",
+      message: err.message
+    });
   }
 });
 
