@@ -120,8 +120,8 @@ app.get("/switch-company/:company", async (req, res) => {
 // ========================
 // 2. Fetch Customers
 // ========================
-app.get("/fetch-customers", async (req, res) => {
-  const { company } = req.query;
+app.get("/fetch-customers/:company", async (req, res) => {
+  const { company } = req.params;
   if (!company) {
     return res.status(400).send("company query param required");
   }
