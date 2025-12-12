@@ -12,6 +12,7 @@ app.use(bodyParser.text({ type: "*/*" })); // to handle XML bodies
 const TALLY_PORT = 9000; // example: Company A → 9000, Company B → 9001
 const TALLY_URL = `http://localhost:${TALLY_PORT}`;
 
+const CLOUD_CUSTOMER_SYNC_URL = "https://app.fancypalace.cloud/api/agent/customer-sync";
 
 
 
@@ -72,7 +73,43 @@ async function sendInventoryInBatches(company, items, batchSize = 500) {
 }
 
 
+async function sendCustomersToCloud(companyName, customers) {
+  try {
+    console.log("\n==============================");
+    console.log("📤 PUSHING CUSTOMERS TO CLOUD");
+    console.log("==============================");
+    console.log("Company:", companyName);
+    console.log("Customers:", customers.length);
 
+    // Calculate payload size
+    const json = JSON.stringify({ companyName, customers });
+    const mb = (Buffer.byteLength(json) / 1024 / 1024).toFixed(2);
+    console.log(`📦 Payload Size: ${mb} MB`);
+
+    // Send to cloud
+    const response = await axios.post(
+      CLOUD_CUSTOMER_SYNC_URL,
+      { companyName, customers },
+      {
+        maxBodyLength: Infinity,
+        maxContentLength: Infinity,
+      }
+    );
+
+    console.log("✅ Cloud Sync Success:", response.data.message);
+
+    return { ok: true, response: response.data };
+
+  } catch (err) {
+    console.log("❌ Cloud Sync Error:", err.message);
+
+    return {
+      ok: false,
+      error: err.message,
+      full: err.response?.data
+    };
+  }
+}
 
 
 
@@ -195,8 +232,12 @@ app.get("/fetch-customers/:company", async (req, res) => {
         : [c.ADDRESS?.ADDRESS || ""]
     }));
 
+    const cloudResult = await sendCustomersToCloud(company, cleaned);
+
+
     return res.json({
       success: true,
+      cloudResult,
       company,
       total: cleaned.length,
       customers: cleaned
