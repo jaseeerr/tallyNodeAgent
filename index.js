@@ -267,6 +267,7 @@ app.get("/fetch-customers/:company", async (req, res) => {
     // Clean & normalize (optional)
     const cleaned = customers.map(c => ({
       name: c.NAME || "",
+      trn:c.TRNNO || "",
       group: c.GROUP || "",
       balance: c.BALANCE || "",
       address: Array.isArray(c.ADDRESS?.ADDRESS)
