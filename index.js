@@ -155,7 +155,7 @@ app.get("/switch-company/:company", async (req, res) => {
 });
 
 
-export function getUniqueXmlFields(xmlString) {
+ function getUniqueXmlFields(xmlString) {
   const parser = new XMLParser({
     ignoreAttributes: false,
     attributeNamePrefix: "",
