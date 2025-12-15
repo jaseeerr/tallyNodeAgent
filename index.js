@@ -154,6 +154,49 @@ app.get("/switch-company/:company", async (req, res) => {
   }
 });
 
+/**
+ * Extract unique XML field names from a Tally XML response
+ * @param {string} xmlString - Raw XML string
+ * @returns {string[]} Array of unique field/tag names
+ */
+export function getUniqueXmlFields(xmlString) {
+  const parser = new XMLParser({
+    ignoreAttributes: false,
+    attributeNamePrefix: "",
+    textNodeName: "value"
+  });
+
+  let parsed;
+  try {
+    parsed = parser.parse(xmlString);
+  } catch (err) {
+    throw new Error("Invalid XML provided");
+  }
+
+  const fields = new Set();
+
+  function traverse(node) {
+    if (node === null || node === undefined) return;
+
+    // If array → traverse each item
+    if (Array.isArray(node)) {
+      node.forEach(traverse);
+      return;
+    }
+
+    // If object → collect keys and recurse
+    if (typeof node === "object") {
+      for (const key of Object.keys(node)) {
+        fields.add(key);
+        traverse(node[key]);
+      }
+    }
+  }
+
+  traverse(parsed);
+
+  return Array.from(fields).sort();
+}
 // ========================
 // 2. Fetch Customers
 // ========================
@@ -189,6 +232,9 @@ app.get("/fetch-customers/:company", async (req, res) => {
 
     const xmlString = tallyResponse.data;
 
+    const uniqueFields = getUniqueXmlFields(xmlString);
+
+    console.log(uniqueFields)
     const parser = new XMLParser({
       ignoreAttributes: false,
       attributeNamePrefix: "",
