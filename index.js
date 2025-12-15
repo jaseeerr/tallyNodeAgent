@@ -154,11 +154,7 @@ app.get("/switch-company/:company", async (req, res) => {
   }
 });
 
-/**
- * Extract unique XML field names from a Tally XML response
- * @param {string} xmlString - Raw XML string
- * @returns {string[]} Array of unique field/tag names
- */
+
 export function getUniqueXmlFields(xmlString) {
   const parser = new XMLParser({
     ignoreAttributes: false,
