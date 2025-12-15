@@ -237,6 +237,7 @@ app.get("/fetch-customers/:company", async (req, res) => {
 
     return res.json({
       success: true,
+      customers,
       cloudResult,
       company,
       total: cleaned.length,
