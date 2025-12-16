@@ -1,211 +1,211 @@
 const cron = require("node-cron");
 const axios = require("axios");
-const fs = require("fs-extra");
+const crypto = require("crypto");
+const fs = require("fs");
 const path = require("path");
-const { createHash } = require("./utils");
-const { sendEventLog } = require("../logger/eventLogger");
+const { v4: uuid } = require("uuid");
 
-const BASE_URL = "http://localhost:3000";
-const HASH_FILE = path.join(__dirname, "hashStore.json");
-
-const CLOUD = {
-  customers: "https://app.fancypalace.cloud/api/agent/customer-sync",
-  inventory: "https://app.fancypalace.cloud/api/agent/inventory-sync"
-};
+// --------------------------------------------------
+// CONFIG
+// --------------------------------------------------
+const AGENT_BASE_URL = "http://localhost:3000";
+const EVENT_LOG_API = "https://app.fancypalace.cloud/api/agent/event-log";
 
 const COMPANIES = [
   "AMANA-FIRST-TRADING-LLC",
   "FANCY-PALACE-TRADING-LLC"
 ];
 
-// ----------------------
-async function loadHashes() {
-  return fs.readJSON(HASH_FILE);
+const HASH_FILE = path.join(__dirname, "hashStore.json");
+
+// --------------------------------------------------
+// HASH STORE
+// --------------------------------------------------
+function loadHashes() {
+  if (!fs.existsSync(HASH_FILE)) {
+    fs.writeFileSync(HASH_FILE, JSON.stringify({}));
+  }
+  return JSON.parse(fs.readFileSync(HASH_FILE, "utf8"));
 }
 
-async function saveHashes(h) {
-  await fs.writeJSON(HASH_FILE, h, { spaces: 2 });
+function saveHashes(hashes) {
+  fs.writeFileSync(HASH_FILE, JSON.stringify(hashes, null, 2));
 }
 
-// ----------------------
-async function sendInventoryInBatches(company, items, batchSize = 500) {
-  let index = 0;
-  while (index < items.length) {
-    const batch = items.slice(index, index + batchSize);
-    await axios.post(CLOUD.inventory, { company, items: batch });
-    index += batchSize;
+function createHash(data) {
+  return crypto
+    .createHash("sha256")
+    .update(JSON.stringify(data))
+    .digest("hex");
+}
+
+// --------------------------------------------------
+// EVENT LOGGER
+// --------------------------------------------------
+async function logEvent(payload) {
+  try {
+    await axios.post(EVENT_LOG_API, payload);
+  } catch (err) {
+    console.error("❌ Event log send failed:", err.message);
   }
 }
 
-// ----------------------
-async function syncCustomers(company) {
-  const start = Date.now();
+// --------------------------------------------------
+// CORE PIPELINE
+// --------------------------------------------------
+async function processModule(company, module) {
+  const base = {
+    company,
+    source: "cron",
+    module
+  };
 
+  let data;
+
+  // ===============================
+  // 1️⃣ FETCH FROM TALLY
+  // ===============================
   try {
-    // ---------------- FETCH
     const res = await axios.get(
-      `${BASE_URL}/fetch-customers/${encodeURIComponent(company)}`
+      `${AGENT_BASE_URL}/fetch-${module}/${company}`
     );
 
-    const customers = res.data.customers;
+    data = res.data?.customers || res.data?.items || [];
 
-    // ✅ FETCH SUCCESS LOG
-    await sendEventLog({
-      company,
-      module: "customers",
+    await logEvent({
+      ...base,
+      eventId: uuid(),
+      timestamp: new Date(),
       action: "fetch",
+      stage: "fetch",
       status: "success",
-      stage: "response",
-      message: "Fetched customers successfully",
+      message: `${module} fetched successfully from Tally`,
       details: {
-        count: customers.length,
-        durationMs: Date.now() - start
+        count: data.length
       }
     });
-
-    // ---------------- HASH CHECK
-    const hashes = await loadHashes();
-    const newHash = createHash(customers);
-    const oldHash = hashes[company].customers;
-
-    if (newHash === oldHash) {
-      return; // nothing changed
-    }
-
-    // 🔁 SYNC START LOG
-    await sendEventLog({
-      company,
-      module: "customers",
-      action: "sync",
-      status: "success",
-      stage: "hash",
-      message: "Customer data changed, syncing started"
-    });
-
-    // ---------------- SYNC
-    await axios.post(CLOUD.customers, {
-      companyName: company,
-      customers
-    });
-
-    // ✅ SYNC SUCCESS LOG
-    await sendEventLog({
-      company,
-      module: "customers",
-      action: "sync",
-      status: "success",
-      stage: "sync",
-      message: "Customers synced successfully",
-      details: { count: customers.length }
-    });
-
-    hashes[company].customers = newHash;
-    await saveHashes(hashes);
-
   } catch (err) {
-    // ❌ ERROR LOG
-    await sendEventLog({
-      company,
-      module: "customers",
+    await logEvent({
+      ...base,
+      eventId: uuid(),
+      timestamp: new Date(),
       action: "fetch",
+      stage: "fetch",
       status: "error",
-      stage: "error",
-      message: "Customer fetch or sync failed",
+      message: `Failed to fetch ${module} from Tally`,
       details: {
         error: err.message
       }
     });
+    return;
   }
-}
 
+  // ===============================
+  // 2️⃣ HASH CALCULATION
+  // ===============================
+  const hashes = loadHashes();
+  const key = `${company}_${module}`;
 
-// ----------------------
-async function syncInventory(company) {
-  try {
-    // ---------------- FETCH
-    const res = await axios.get(
-      `${BASE_URL}/fetch-inventory/${encodeURIComponent(company)}`
-    );
+  const oldHash = hashes[key] || null;
+  const newHash = createHash(data);
+  const changed = oldHash !== newHash;
 
-    const items = res.data.items;
-
-    // ✅ FETCH SUCCESS LOG
-    await sendEventLog({
-      company,
-      module: "inventory",
-      action: "fetch",
-      status: "success",
-      stage: "response",
-      message: "Fetched inventory successfully",
-      details: { count: items.length }
-    });
-
-    // ---------------- HASH CHECK
-    const hashes = await loadHashes();
-    const newHash = createHash(items);
-    const oldHash = hashes[company].inventory;
-
-    if (newHash === oldHash) {
-      return;
+  await logEvent({
+    ...base,
+    eventId: uuid(),
+    timestamp: new Date(),
+    action: "sync",
+    stage: "hash",
+    status: "success",
+    message: `${module} hash calculated`,
+    details: {
+      oldHash,
+      newHash,
+      changed
     }
+  });
 
-    // 🔁 SYNC START LOG
-    await sendEventLog({
-      company,
-      module: "inventory",
+  // ===============================
+  // 3️⃣ HASH UNCHANGED → STOP
+  // ===============================
+  if (!changed) {
+    await logEvent({
+      ...base,
+      eventId: uuid(),
+      timestamp: new Date(),
       action: "sync",
-      status: "success",
       stage: "hash",
-      message: "Inventory changed, syncing started"
-    });
-
-    // ---------------- SYNC (BATCHED)
-    await sendInventoryInBatches(company, items);
-
-    // ✅ SYNC SUCCESS LOG
-    await sendEventLog({
-      company,
-      module: "inventory",
-      action: "sync",
       status: "success",
-      stage: "sync",
-      message: "Inventory synced successfully",
-      details: { count: items.length }
+      message: `${module} unchanged — sync skipped`,
+      details: {
+        hash: newHash
+      }
+    });
+    return;
+  }
+
+  // ===============================
+  // 4️⃣ SYNC TO EXTERNAL APP
+  // ===============================
+  try {
+    const syncUrl =
+      module === "customers"
+        ? "https://app.fancypalace.cloud/api/agent/customer-sync"
+        : "https://app.fancypalace.cloud/api/agent/inventory-sync";
+
+    await axios.post(syncUrl, {
+      company,
+      [module]: data
     });
 
-    hashes[company].inventory = newHash;
-    await saveHashes(hashes);
+    hashes[key] = newHash;
+    saveHashes(hashes);
 
-  } catch (err) {
-    // ❌ ERROR LOG
-    await sendEventLog({
-      company,
-      module: "inventory",
-      action: "fetch",
-      status: "error",
-      stage: "error",
-      message: "Inventory fetch or sync failed",
+    await logEvent({
+      ...base,
+      eventId: uuid(),
+      timestamp: new Date(),
+      action: "sync",
+      stage: "sync",
+      status: "success",
+      message: `${module} synced successfully to external app`,
       details: {
-        error: err.message
+        count: data.length
+      }
+    });
+  } catch (err) {
+    await logEvent({
+      ...base,
+      eventId: uuid(),
+      timestamp: new Date(),
+      action: "sync",
+      stage: "sync",
+      status: "error",
+      message: `Failed to sync ${module} to external app`,
+      details: {
+        error: err.response?.data || err.message
       }
     });
   }
 }
 
-
-// ----------------------
-cron.schedule("*/1 * * * *", async () => {
-  console.log("\n⏰ CRON RUN");
+// --------------------------------------------------
+// CRON SCHEDULER
+// --------------------------------------------------
+cron.schedule("*/2 * * * *", async () => {
+  console.log("⏰ Cron started:", new Date().toISOString());
 
   for (const company of COMPANIES) {
-    try {
-      await syncCustomers(company);
-      await syncInventory(company);
-    } catch (err) {
-      console.error(`❌ ${company} error:`, err.message);
-      console.log(err)
-    }
+    await processModule(company, "customers");
+    await processModule(company, "inventory");
   }
+
+  console.log("✅ Cron finished:", new Date().toISOString());
 });
 
-console.log("🕒 Cron running every 2 minutes");
+// --------------------------------------------------
+// INIT (called from index.js)
+// --------------------------------------------------
+module.exports = () => {
+  console.log("🕒 Cron job initialized");
+};
