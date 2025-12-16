@@ -6,6 +6,7 @@
     "express": "^5.2.1",
     "fast-xml-parser": "^5.3.2",
     "fs-extra": "^11.3.2",
-    "node-cron": "^4.2.1"
+    "node-cron": "^4.2.1",
+    "uuid": "^13.0.0"
   }
 }
