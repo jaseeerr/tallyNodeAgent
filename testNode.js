@@ -8,11 +8,13 @@ async function getActiveCompany() {
   <ENVELOPE>
     <HEADER>
       <TALLYREQUEST>Export</TALLYREQUEST>
+      <TYPE>System</TYPE>
+      <ID>System</ID>
     </HEADER>
     <BODY>
       <DESC>
         <STATICVARIABLES>
-          <SVCURRENTCOMPANY/>
+          <SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>
         </STATICVARIABLES>
       </DESC>
     </BODY>
@@ -33,16 +35,16 @@ async function getActiveCompany() {
     const parsed = await parser.parseStringPromise(response.data)
 
     const company =
-      parsed?.ENVELOPE?.BODY?.DESC?.STATICVARIABLES?.SVCURRENTCOMPANY
+      parsed?.ENVELOPE?.HEADER?.RESPONSEHEADER?.SVCURRENTCOMPANY
 
     return company || null
   } catch (err) {
-    console.error("❌ Tally error:", err.message)
+    console.error("❌ Failed to fetch active company:", err.message)
     return null
   }
 }
 
-// test
+// test run
 ;(async () => {
   const company = await getActiveCompany()
   console.log("✅ Active Company:", company)
