@@ -1,29 +1,8 @@
-/**
- * Tally Agent – Single File (CommonJS)
- * -----------------------------------
- * - Fetch active company
- * - Ready to extend (sales, sync, polling)
- */
-
 const axios = require("axios")
 const xml2js = require("xml2js")
 
 const TALLY_URL = "http://localhost:9000"
 
-// ----------------------------------
-// Helper: Parse XML safely
-// ----------------------------------
-async function parseXML(xml) {
-  const parser = new xml2js.Parser({
-    explicitArray: false,
-    ignoreAttrs: true,
-  })
-  return parser.parseStringPromise(xml)
-}
-
-// ----------------------------------
-// Get Active Company from Tally
-// ----------------------------------
 async function getActiveCompany() {
   const xml = `
   <ENVELOPE>
@@ -31,16 +10,11 @@ async function getActiveCompany() {
       <TALLYREQUEST>Export</TALLYREQUEST>
     </HEADER>
     <BODY>
-      <EXPORTDATA>
-        <REQUESTDESC>
-          <REPORTNAME>System</REPORTNAME>
-        </REQUESTDESC>
-        <REQUESTDATA>
-          <SYSTEM>
-            <SVCURRENTCOMPANY/>
-          </SYSTEM>
-        </REQUESTDATA>
-      </EXPORTDATA>
+      <DESC>
+        <STATICVARIABLES>
+          <SVCURRENTCOMPANY/>
+        </STATICVARIABLES>
+      </DESC>
     </BODY>
   </ENVELOPE>
   `
@@ -51,34 +25,27 @@ async function getActiveCompany() {
       timeout: 5000,
     })
 
-    const parsed = await parseXML(response.data)
+    const parser = new xml2js.Parser({
+      explicitArray: false,
+      ignoreAttrs: true,
+    })
 
-    const activeCompany =
-      parsed?.ENVELOPE?.BODY?.DATA?.SYSTEM?.SVCURRENTCOMPANY
+    const parsed = await parser.parseStringPromise(response.data)
 
-    return activeCompany || null
+    const company =
+      parsed?.ENVELOPE?.BODY?.DESC?.STATICVARIABLES?.SVCURRENTCOMPANY
+
+    return company || null
   } catch (err) {
-    console.error("❌ Failed to get active company:", err.message)
+    console.error("❌ Tally error:", err.message)
     return null
   }
 }
 
-// ----------------------------------
-// Runner (temporary test)
-// ----------------------------------
+// test
 ;(async () => {
   const company = await getActiveCompany()
-
-  if (!company) {
-    console.log("⚠️ No active company detected")
-  } else {
-    console.log("✅ Active Company:", company)
-  }
+  console.log("✅ Active Company:", company)
 })()
 
-// ----------------------------------
-// Exports (for later use)
-// ----------------------------------
-module.exports = {
-  getActiveCompany,
-}
+module.exports = { getActiveCompany }
