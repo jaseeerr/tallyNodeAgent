@@ -84,6 +84,22 @@ async function processModule(company, module) {
         count: data.length
       }
     });
+
+    if (data.length === 0) {
+      await logEvent({
+        ...base,
+        eventId: uuid(),
+        timestamp: new Date(),
+        action: "fetch",
+        stage: "fetch",
+        status: "error",
+        message: `${module} fetched successfully from Tally, fetched empty array from tally`,
+        details: {
+          count: 0
+        }
+      });
+      return;
+    }
   } catch (err) {
     await logEvent({
       ...base,
