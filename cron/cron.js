@@ -14,10 +14,10 @@ const EVENT_LOG_API = "https://app.fancypalace.cloud/api/agent/event-log";
 const COMPANIES = [
   {
     tallyName: "AMANA FIRST TRADING LLC - (from 1-Jan-25)",
-    externalName: "AMANA FIRST TRADING LLC"
+    externalName: "AMANA-FIRST-TRADING-LLC"
   },
   {
-    tallyName: "FANCY PALACE TRADING LLC - (from 1-Jan-25)",
+    tallyName: "FANCY-PALACE-TRADING-LLC - (from 1-Jan-25)",
     externalName: "FANCY PALACE TRADING LLC"
   }
 ];
