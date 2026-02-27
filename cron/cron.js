@@ -215,7 +215,7 @@ async function processModule(companyObj, module) {
 // --------------------------------------------------
 // CRON SCHEDULER
 // --------------------------------------------------
-cron.schedule("*/2 * * * *", async () => {
+cron.schedule("*/50 * * * * *", async () => {
   console.log("⏰ Cron started:", new Date().toISOString());
 
   for (const companyObj of COMPANIES) {
