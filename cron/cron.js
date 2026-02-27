@@ -12,8 +12,14 @@ const AGENT_BASE_URL = "http://localhost:3000";
 const EVENT_LOG_API = "https://app.fancypalace.cloud/api/agent/event-log";
 
 const COMPANIES = [
-  "AMANA-FIRST-TRADING-LLC",
-  "FANCY-PALACE-TRADING-LLC"
+  {
+    tallyName: "AMANA FIRST TRADING LLC - (from 1-Jan-25)",
+    externalName: "AMANA FIRST TRADING LLC"
+  },
+  {
+    tallyName: "FANCY PALACE TRADING LLC - (from 1-Jan-25)",
+    externalName: "FANCY PALACE TRADING LLC"
+  }
 ];
 
 const HASH_FILE = path.join(__dirname, "hashStore.json");
@@ -53,9 +59,10 @@ async function logEvent(payload) {
 // --------------------------------------------------
 // CORE PIPELINE
 // --------------------------------------------------
-async function processModule(company, module) {
+async function processModule(companyObj, module) {
+  const { tallyName, externalName } = companyObj;
   const base = {
-    company,
+    company: externalName,
     source: "cron",
     module
   };
@@ -67,7 +74,7 @@ async function processModule(company, module) {
   // ===============================
   try {
     const res = await axios.get(
-      `${AGENT_BASE_URL}/fetch-${module}/${company}`
+      `${AGENT_BASE_URL}/fetch-${module}/${encodeURIComponent(tallyName)}`
     );
 
     data = res.data?.customers || res.data?.items || [];
@@ -120,7 +127,7 @@ async function processModule(company, module) {
   // 2️⃣ HASH CALCULATION
   // ===============================
   const hashes = loadHashes();
-  const key = `${company}_${module}`;
+  const key = `${externalName}_${module}`;
 
   const oldHash = hashes[key] || null;
   const newHash = createHash(data);
@@ -170,7 +177,7 @@ async function processModule(company, module) {
         : "https://app.fancypalace.cloud/api/agent/inventory-sync";
 
     await axios.post(syncUrl, {
-      company,
+      company: externalName,
       [module]: data
     });
 
@@ -211,9 +218,9 @@ async function processModule(company, module) {
 cron.schedule("*/2 * * * *", async () => {
   console.log("⏰ Cron started:", new Date().toISOString());
 
-  for (const company of COMPANIES) {
-    await processModule(company, "customers");
-    await processModule(company, "inventory");
+  for (const companyObj of COMPANIES) {
+    await processModule(companyObj, "customers");
+    await processModule(companyObj, "inventory");
   }
 
   console.log("✅ Cron finished:", new Date().toISOString());
