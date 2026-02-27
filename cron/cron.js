@@ -18,7 +18,7 @@ const COMPANIES = [
   },
   {
     tallyName: "FANCY-PALACE-TRADING-LLC - (from 1-Jan-25)",
-    externalName: "FANCY PALACE TRADING LLC"
+    externalName: "FANCY-PALACE-TRADING-LLC"
   }
 ];
 
